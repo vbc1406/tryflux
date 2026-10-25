@@ -22,6 +22,7 @@
 - `/openapi.json` is no longer served; it was reachable without the API key.
 
 ### Security (pre-launch review)
+- `FLUX_OS_DISABLE=<model id>` (and `FLUX_OS_ONLY_MODELS`) now also cover pass-through spellings of the same model: `openai/gpt-4o`, `OPENAI/gpt-4o` and `GPT-4o` are refused when `gpt-4o` is disabled, and `openai/gpt-5-mini` is accepted when `gpt-5-mini` is allow-listed. Matching is case-insensitive. Before, a client with the API key could reach a model the operator had switched off by prefixing its provider.
 - A client hanging up mid-request (aborted or half-open POSTs) no longer writes a `ClientDisconnect` stack trace to the server log per connection. It answers 499 quietly, so a flood of half-open connections can't flood the log.
 - **Classifier ReDoS**: the multi-part-list regex (`^\s*...` with `re.M`) was quadratic on runs of newlines or whitespace, so one 60 KB request stalled the server for 10 to 16 seconds. It is linear now, and pattern matching reads at most 12k characters from each end of a prompt (a 1 MB prompt routed in 1.3 s before, about 35 ms now).
 - **Pinned models bypassed `FLUX_OS_DISABLE` / `FLUX_OS_ONLY_MODELS`.** Sending `model: "gpt-5"` or `"claude-opus-4-7"` (or any pass-through name) reached the provider even when the operator had switched it off. Pins are now checked against the same lists.

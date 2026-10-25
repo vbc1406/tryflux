@@ -183,3 +183,49 @@ def test_client_hanging_up_mid_request_leaves_no_stack_trace(live_url, caplog) -
         r.getMessage() for r in caplog.records if r.exc_info
     ]
     assert httpx.get(live_url + "/health").status_code == 200
+
+
+@pytest.mark.parametrize("name", ["gpt-4o", "openai/gpt-4o", "openai/GPT-4o", "GPT-4o", "OPENAI/gpt-4o"])
+def test_a_bare_disable_entry_covers_every_spelling_of_the_model(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    from flux_os.router import RoutingError
+
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    monkeypatch.setenv("FLUX_OS_DISABLE", "gpt-4o")
+    router = Router(Catalog.load())
+    with pytest.raises(RoutingError):
+        router.route([{"role": "user", "content": "hi"}], model=name)
+    # other models of the same provider stay available
+    assert (
+        router.route([{"role": "user", "content": "hi"}], model="openai/gpt-5-mini").model.provider
+        == "openai"
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "allowed"),
+    [
+        ("gpt-5-mini", True),
+        ("openai/gpt-5-mini", True),
+        ("openai/GPT-5-MINI", True),
+        ("openai/gpt-4o", False),
+        ("gpt-4o", False),
+    ],
+)
+def test_only_models_matches_provider_prefixed_and_mixed_case_names(
+    monkeypatch: pytest.MonkeyPatch, name: str, allowed: bool
+) -> None:
+    from flux_os.router import RoutingError
+
+    monkeypatch.setenv("OPENAI_API_KEY", "k")
+    monkeypatch.setenv("FLUX_OS_ONLY_MODELS", "gpt-5-mini")
+    router = Router(Catalog.load())
+    if allowed:
+        assert (
+            router.route([{"role": "user", "content": "hi"}], model=name).model.upstream_id.lower()
+            == "gpt-5-mini"
+        )
+    else:
+        with pytest.raises(RoutingError):
+            router.route([{"role": "user", "content": "hi"}], model=name)
