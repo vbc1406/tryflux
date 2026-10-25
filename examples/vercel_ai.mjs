@@ -1,4 +1,4 @@
-// Vercel AI SDK (Node) — every provider flavour works against flux-os.
+// Vercel AI SDK (Node) — the main provider flavours are shown against flux-os (not covered by the automated tests).
 //   npm i ai @ai-sdk/openai-compatible @ai-sdk/openai @ai-sdk/anthropic zod
 //   flux-os serve && node examples/vercel_ai.mjs
 import { generateText, tool, stepCountIs } from 'ai';

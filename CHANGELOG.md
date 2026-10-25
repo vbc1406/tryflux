@@ -3,13 +3,13 @@
 ## Unreleased
 
 ### Changed
-- Catalog refresh, 2026-10-25 (branch `catalog-refresh-nov`). Every price in `models.json` matched the provider's official page, so no price changed. Sources and the rating method are in `docs/catalog-sources.md`.
+- Catalog refresh, 2026-10-25. Every price in `models.json` matched the provider's official page, so no price changed. Sources and the rating method are in `docs/catalog-sources.md`.
 - Quality ratings: `claude-haiku-4-5`, `claude-sonnet-5` and `claude-opus-5` were exact copies of their successors' rows. They are now rated below `claude-haiku-5-5`, `claude-sonnet-5-5` and `claude-opus-5-5` on code, reasoning and tool use, following the published Terminal-Bench 4.0 / FrontierCode / HLE numbers. Reasoning now follows HLE-with-tools (Opus 5.5 > Fable 5.1 = Astra > Opus 5; Astra was top at 0.97). `gpt-6-luna` is rated above `gpt-5.6-luna` and below `claude-haiku-5-5` on code generation. Ordering is sourced; the size of each adjustment is a judgement.
 - Because of that, the README's hardest example (the Rust hash map) now routes to `gpt-oss-120b` (Groq) instead of `gpt-6-luna`; the README lines were updated, not the test.
 - `gemini-3.8-flash` is listed at 36 s (was 20 s): it measured 36 to 94 s on a trivial tool call on Google's free tier. Re-measure on a paid key.
 - `claude-sonnet-4-6` max output is 128,000 (was 64,000); `mistral-large-3` and `mistral-medium-3.5` accept image input (Mistral's model pages list it). README disclaimer date is 2026-10-25.
 - README no longer says tool calls work "across every provider". It now states what the mocked tests cover and that no provider has been checked live.
-- Added `tests/test_live_astra.py` (function call, streaming function call, tool loop against the real API). They skip without `OPENAI_API_KEY` and have not been run. OpenAI's model page lists Chat Completions and function calling for Astra, while a third-party relay doc says Chat Completions rejects `tools` for it. Until the live tests pass, `gpt-6-astra` stays `tools: false`. Its `function_calling` rating (0.93) is the model's general ability and has no effect on routing while tools are excluded.
+- Added `tests/test_live_astra.py` (function call, streaming function call, tool loop against the real API). They skip without `OPENAI_API_KEY` and have not been run. OpenAI's model page lists function calling for Astra, but a live run on 2026-10-25 got a 400 from Chat Completions when tools were sent. `gpt-6-astra` stays `tools: false`; the tests document the behaviour. Its `function_calling` rating (0.93) is the model's general ability and has no effect on routing while tools are excluded.
 
 ### Fixed
 - Streamed tool calls now always carry an `index`. Gemini's OpenAI-compatible stream omits it and sends each parallel call whole, so OpenAI-format clients merged two calls into one invalid JSON string, and the Anthropic Messages path kept only the first call and ended the turn with `end_turn` (an agent loop stopped). Found in a live run; the mocked Gemini stream had always included `index`, so the suite never saw it.
@@ -21,7 +21,7 @@
 - Claude 4.7 and later (every 4.7+/5.x entry in the catalog, and unlisted `claude-*` names that match) accept only default sampling values, so a client's `temperature=0.2` or `top_p` made Anthropic answer 400, which is not rerouted. `drop_params` now applies on the Anthropic path too (it only did for OpenAI-shaped providers), and those models drop `temperature` / `top_p`. Claude Sonnet 4.6 and Haiku 4.5 still receive them.
 - `/openapi.json` is no longer served; it was reachable without the API key.
 
-### Security (pre-launch review)
+### Security
 - `FLUX_OS_DISABLE=<model id>` (and `FLUX_OS_ONLY_MODELS`) now also cover pass-through spellings of the same model: `openai/gpt-4o`, `OPENAI/gpt-4o` and `GPT-4o` are refused when `gpt-4o` is disabled, and `openai/gpt-5-mini` is accepted when `gpt-5-mini` is allow-listed. Matching is case-insensitive. Before, a client with the API key could reach a model the operator had switched off by prefixing its provider.
 - A client hanging up mid-request (aborted or half-open POSTs) no longer writes a `ClientDisconnect` stack trace to the server log per connection. It answers 499 quietly, so a flood of half-open connections can't flood the log.
 - **Classifier ReDoS**: the multi-part-list regex (`^\s*...` with `re.M`) was quadratic on runs of newlines or whitespace, so one 60 KB request stalled the server for 10 to 16 seconds. It is linear now, and pattern matching reads at most 12k characters from each end of a prompt (a 1 MB prompt routed in 1.3 s before, about 35 ms now).
@@ -50,7 +50,7 @@
 - Not yet announced for shutdown, earliest possible retirement: `claude-opus-4-7` 2027-04-16, `claude-opus-5` 2027-07-24, `claude-fable-5-1` 2027-09-01, `claude-opus-5-5` 2027-09-22, `claude-sonnet-5-5` 2027-09-28, `claude-haiku-5-5` 2027-10-07. `claude-haiku-5-5` is $0.50/$2.50 for prompts over 100k tokens (catalog lists the $0.10/$0.50 base tier); `gemini-3.1-pro-preview` is $4/$18 over 200k; GPT-6/5.6 models are 2x input / 1.5x output over 272k.
 
 ## 0.2.0
-Fixes from a routing evaluation (real providers, stub upstreams, 138 tests).
+Fixes from a routing evaluation (real providers, stub upstreams).
 
 ### Fixed
 - Anthropic Messages path no longer breaks Gemini 3 tool loops: the `thought_signature` round-trips on `tool_use` blocks (streaming and not, parallel calls too) and is remembered server-side for clients that strip unknown fields. A "missing thought_signature" 400 is now reroutable.
@@ -65,7 +65,7 @@ Fixes from a routing evaluation (real providers, stub upstreams, 138 tests).
 - Unknown tool_call_ids are logged once.
 
 ### Behaviour change to know about
-- The 0.02 tolerance sends noticeably more traffic to the cheapest adequate model than 0.1.0 did. On a hard 50-prompt math/STEM set, `auto` scored 49/50 versus 40/50 for always-cheapest, with the reroute safety net rescuing many first picks. See the README for limits.
+- The 0.02 tolerance sends noticeably more traffic to the cheapest adequate model than 0.1.0 did.
 
 ### Docs
 - README examples are now checked by tests; notes on single-instance tool loops, mid-loop reroutes, and tier-gated models.
