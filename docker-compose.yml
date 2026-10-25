@@ -1,0 +1,20 @@
+services:
+  flux-os:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      # Set the keys for the providers you want routed to; unset ones are skipped.
+      - OPENAI_API_KEY
+      - ANTHROPIC_API_KEY
+      - GOOGLE_API_KEY
+      - GROQ_API_KEY
+      - MISTRAL_API_KEY
+      - DEEPSEEK_API_KEY
+      - OPENROUTER_API_KEY
+      # Required: the container listens on 0.0.0.0 inside, and flux-os refuses to start there without a key.
+      # Clients send it as their API key. Example: FLUX_OS_API_KEY=$(openssl rand -hex 24) docker compose up -d
+      - FLUX_OS_API_KEY=${FLUX_OS_API_KEY:?set FLUX_OS_API_KEY to a secret that clients will send as their API key}
+      - FLUX_OS_ROUTE_ALL
+      - FLUX_OS_DEFAULT_MODE
+    restart: unless-stopped
