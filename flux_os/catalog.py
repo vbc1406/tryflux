@@ -153,9 +153,14 @@ class Catalog:
         if in_catalog:
             return None if model.enabled else "it is switched off by FLUX_OS_DISABLE or FLUX_OS_ONLY_MODELS"
         provider = f"provider:{model.provider}"
-        if model.id in self.disabled or provider in self.disabled:
+        # a pass-through name can arrive as "openai/gpt-4o" or "GPT-4o": compare every spelling of the same
+        # upstream model, case-insensitively, so a bare FLUX_OS_DISABLE=gpt-4o entry still covers it
+        names = {model.id.lower(), model.upstream_id.lower(), provider}
+        disabled = {d.lower() for d in self.disabled}
+        allow = {a.lower() for a in self.allow}
+        if names & disabled:
             return "it is switched off by FLUX_OS_DISABLE"
-        if self.allow and model.id not in self.allow and provider not in self.allow:
+        if allow and not names & allow:
             return "it is not in FLUX_OS_ONLY_MODELS"
         return None
 
