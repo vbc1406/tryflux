@@ -1,6 +1,6 @@
 """Heuristic request classifier: task type, complexity, and hard requirements.
 
-Pure Python regexes — no LLM call, no network, well under a millisecond.
+Pure Python regexes — no LLM call, no network. Typically 0.1 to 0.5 ms for short prompts; cost grows with prompt length.
 Works on OpenAI-shaped chat messages (the canonical format inside flux-os).
 """
 

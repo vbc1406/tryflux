@@ -32,8 +32,8 @@ is **rerouted** to the next-best model, on a different provider first.
 
 - **Zero code changes.** Point your OpenAI or Anthropic client at flux-os and set `model="auto"`.
 - **Agent tool calls.** Tool calls, streaming tool calls, and multi-turn tool loops are covered by tests against mocked OpenAI-compatible and Anthropic upstreams, plus a Gemini tool-loop test. They have not been checked against each provider's live API, and six GPT-5.6/6.x models are excluded from tool requests (see Known limits).
-- **Three API formats in, any provider out.** Chat Completions, the Responses API and Anthropic Messages, translated to OpenAI, Anthropic, Gemini, Groq, Mistral, DeepSeek, OpenRouter or Ollama. Point another OpenAI-compatible server at flux-os by setting `OPENAI_BASE_URL` (or `OLLAMA_BASE_URL` for an Ollama-compatible one) before starting `flux-os serve`.
-- **Fast.** Pure-Python heuristics, no LLM in the decision path, well under 1 ms per decision.
+- **Three API formats in, any provider out.** Chat Completions, the Responses API and Anthropic Messages, translated to OpenAI, Anthropic, Gemini, Groq or Mistral, which `auto` routes across. DeepSeek, OpenRouter and Ollama are reachable only by pinning `provider/model` (for example `deepseek/deepseek-chat`). To send flux-os's OpenAI traffic to another OpenAI-compatible server, set `OPENAI_BASE_URL` (or `OLLAMA_BASE_URL` for Ollama) before starting `flux-os serve`.
+- **Fast.** Pure-Python heuristics, no LLM in the decision path, typically 0.1 to 0.5 ms per decision for short prompts, growing with prompt length (about 10 ms at 20 KB).
 
 ## Quickstart
 
@@ -63,6 +63,7 @@ flux-os serve                  # http://127.0.0.1:8000
 ```
 
 ```python
+# pip install openai
 from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
@@ -89,7 +90,7 @@ print(resp.choices[0].message.content, resp.flux["model"])
 |---|---|
 | pip / CLI | `pip install "git+https://github.com/vbc1406/tryflux"` then `flux-os serve` |
 | uv, no install | `uvx --from git+https://github.com/vbc1406/tryflux flux-os serve` |
-| Docker | `docker build -t flux-os . && docker run -p 127.0.0.1:8000:8000 -e OPENAI_API_KEY -e FLUX_OS_API_KEY flux-os` |
+| Docker | `export FLUX_OS_API_KEY=$(openssl rand -hex 24)` then `docker build -t flux-os . && docker run -p 127.0.0.1:8000:8000 -e OPENAI_API_KEY -e FLUX_OS_API_KEY flux-os` (the container refuses to start without `FLUX_OS_API_KEY`) |
 | Docker Compose | `FLUX_OS_API_KEY=$(openssl rand -hex 24) docker compose up -d` (reads provider keys from your environment; `FLUX_OS_API_KEY` is required) |
 | Python module | `python -m flux_os serve` |
 | Python library | `from flux_os import FluxOS, route`: sync, async and streaming |
@@ -97,8 +98,8 @@ print(resp.choices[0].message.content, resp.flux["model"])
 
 ## Works with
 
-Each row below is exercised by the test suite or was run end to end against a live
-flux-os server. The upstream provider responses in these tests are mocked, so no row
+Each row below is exercised by the test suite or was run by hand against a live
+flux-os server (rows marked † are hand-checked only). The upstream provider responses in these tests are mocked, so no row
 here has been checked against a live provider API. The HTTP, SSE, tool calling, format
 translation and routing are the real code paths. The mocks speak two wire formats: OpenAI
 Chat Completions (standing in for OpenAI, Gemini, Groq, Mistral, DeepSeek, OpenRouter and
@@ -112,13 +113,15 @@ Ollama) and Anthropic Messages. Only Gemini has its own tool-loop test.
 | LangChain `ChatOpenAI` | `base_url=...` (Responses mode works too) | invoke, stream, `bind_tools` |
 | LangGraph | `create_react_agent(ChatOpenAI(base_url=...), tools)` | full ReAct loop |
 | LangChain `ChatAnthropic` | `base_url="http://localhost:8000"` | invoke, `bind_tools` |
-| Vercel AI SDK | `createOpenAICompatible`, `createOpenAI` (Responses), `.chat()`, `createAnthropic` | `generateText` + `streamText` with multi-step tools |
-| Claude Code | `ANTHROPIC_BASE_URL=http://localhost:8000` with `FLUX_OS_ROUTE_ALL=1` on the server | prompts and tool turns |
+| Vercel AI SDK † | `createOpenAICompatible`, `createOpenAI` (Responses), `.chat()`, `createAnthropic` | `generateText` + `streamText` with multi-step tools |
+| Claude Code † | `ANTHROPIC_BASE_URL=http://localhost:8000` with `FLUX_OS_ROUTE_ALL=1` on the server | prompts and tool turns |
 | curl / any HTTP client | see [`examples/curl.sh`](examples/curl.sh) | yes |
 
 Anything else that speaks the OpenAI or Anthropic API (n8n, CrewAI, LlamaIndex, Continue, Cline,
 Open WebUI, and so on) should work the same way, but hasn't been tested yet. If you try one,
 please open an issue with the result.
+
+† Not covered by the automated tests; checked by hand only.
 
 Runnable examples are in [`examples/`](examples/).
 
@@ -181,7 +184,7 @@ for the whole server with `FLUX_OS_DEFAULT_MODE`.
 | `POST /v1/messages/count_tokens` | Anthropic token estimate |
 | `POST /v1/route` | The routing decision as JSON, with no model call |
 | `GET /v1/models` | Directives plus every model you have a key for |
-| `GET /health` | Liveness and available providers |
+| `GET /health` | Liveness and version |
 
 ## Configuration
 
@@ -189,7 +192,10 @@ Everything works with nothing but provider keys. For more control:
 
 | Env var | Default | |
 |---|---|---|
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` (or `GEMINI_API_KEY`), `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY` | | Providers to route across. Unset providers are skipped. |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` (or `GEMINI_API_KEY`), `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY` | | Providers whose keys are set are routed across (`auto` covers OpenAI, Anthropic, Google, Groq and Mistral). `DEEPSEEK_API_KEY` and `OPENROUTER_API_KEY` only enable pinned `deepseek/...` and `openrouter/...` models. |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible upstream used for OpenAI models. |
+| `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | Ollama upstream for pinned `ollama/...` models. |
+| `FLUX_OS_ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Anthropic upstream. |
 | `FLUX_OS_API_KEY` | none | Clients must send it as `Authorization: Bearer ...` or `x-api-key`. **Set it whenever the server is reachable by others.** |
 | `FLUX_OS_ALLOWED_HOSTS` | none | Extra `Host` / `Origin` names accepted when flux-os runs on loopback **without** `FLUX_OS_API_KEY` (for example a local reverse proxy name). Loopback names are always accepted. |
 | `FLUX_OS_HOST` / `FLUX_OS_PORT` | `127.0.0.1` / `8000` | Bind address (`PORT` is honoured too) |
@@ -222,7 +228,8 @@ instead. The catalog decides whether a coding turn needs a frontier model.
 [`flux_os/models.json`](flux_os/models.json), with prices (USD per 1M tokens), context windows,
 capabilities and per-task quality ratings. Run `flux-os models --all` to list them. The quality
 ratings are editorial estimates built from public benchmarks, not measurements of your
-workload.
+workload, and some (for example `gpt-6-luna` and `gpt-6.1-sol`) are provisional; see
+[`docs/catalog-sources.md`](docs/catalog-sources.md).
 
 **Models your account can't call.** The catalog lists models, not what your plan allows. A model
 that is gated on your tier (for example `mistral-large-3` returning 403 `tier_not_allowed`) or heavily rate-limited will be
@@ -271,7 +278,7 @@ is a small LRU cache of tool-call ids (for agent loop continuity) and recent Res
 
 Known limits:
 - `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-luna`, `gpt-6.1-sol` and `gpt-6-astra` are marked as not
-  tool-capable. OpenAI rejects function tools for them on Chat Completions ("Function tools with
+  tool-capable. In a live run on 2026-10-25 OpenAI rejected function tools for them on Chat Completions ("Function tools with
   reasoning_effort are not supported ... use /v1/responses"), and flux-os only speaks Chat Completions to
   OpenAI, so tool requests skip them. If you pin one of them and send `tools`, you get a 400.
 - Reasoning models (gpt-oss, o-series, Gemini thinking) spend `max_tokens` on hidden reasoning. With a

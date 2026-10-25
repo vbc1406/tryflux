@@ -1,4 +1,4 @@
-"""Live checks for GPT-6 Astra function calling over Chat Completions (currently expected to fail).
+"""Live checks for GPT-6 Astra function calling over Chat Completions (documents the observed 400 as of 2026-10-25).
 
 These call the real OpenAI API through the flux-os server, pinned to ``gpt-6-astra``. They skip
 unless OPENAI_API_KEY is set when pytest starts, and they cost real money. Run with:

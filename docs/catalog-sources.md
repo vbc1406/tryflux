@@ -1,7 +1,6 @@
 # Catalog sources
 
-Everything in `flux_os/models.json` was checked against the provider's own pages on **2026-10-25**.
-No aggregator or blog was used for prices, limits or capabilities.
+Prices, context windows and capability flags in `flux_os/models.json` were checked against vendor pages on **2026-10-25**. Ratings are editorial. Where a source was only a search-result excerpt, or a figure could not be verified, the entry below says so.
 
 ## How ratings are set
 
