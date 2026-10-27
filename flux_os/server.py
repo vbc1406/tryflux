@@ -246,13 +246,16 @@ def create_app(
 
     @app.middleware("http")
     async def auth(request: Request, call_next: Any) -> Response:
-        if api_key and request.url.path.startswith("/v1/"):
+        # scope["path"] is what the router matches; request.url is rebuilt from the client's Host header
+        # on older Starlette versions, so it must not decide who needs a key.
+        path = request.scope["path"]
+        if api_key and path.startswith("/v1/"):
             header = request.headers.get("authorization", "")
             token = (
                 header[7:] if header.lower().startswith("bearer ") else request.headers.get("x-api-key", "")
             )
             if not secrets.compare_digest(token.encode(), api_key.encode()):
-                if request.url.path.startswith("/v1/messages"):
+                if path.startswith("/v1/messages"):
                     return _anthropic_error(401, "invalid flux-os API key")
                 return _openai_error(401, "invalid flux-os API key", "authentication_error")
         return await call_next(request)
