@@ -113,6 +113,32 @@ async def test_host_check_is_off_when_not_local_only(keys, fake) -> None:
     assert r.status_code == 200
 
 
+# ── shared API key: every /v1/* route needs it, whatever the Host header says ───────────────────
+@pytest.mark.parametrize("headers", [{}, {"authorization": "Bearer wrong"}, {"x-api-key": "wrong"}])
+async def test_keyed_server_refuses_missing_or_wrong_key(keys, fake, headers: dict) -> None:
+    async with _client(fake, api_key="secret") as c:
+        r = await c.post("/v1/chat/completions", json=CHAT, headers=headers)
+    assert r.status_code == 401
+    assert not fake.calls, "a refused request must never spend credits"
+
+
+@pytest.mark.parametrize("headers", [{"authorization": "Bearer secret"}, {"x-api-key": "secret"}])
+async def test_keyed_server_accepts_either_key_header(keys, fake, headers: dict) -> None:
+    async with _client(fake, api_key="secret") as c:
+        r = await c.post("/v1/chat/completions", json=CHAT, headers=headers)
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("host", ["x?", "x#", "x/v1", "a@b?", "x?/v1/"])
+@pytest.mark.parametrize("path", ["/v1/chat/completions", "/v1/messages", "/v1/route"])
+async def test_auth_gate_ignores_a_hostile_host_header(keys, fake, host: str, path: str) -> None:
+    """Older Starlette rebuilds request.url from Host; the gate must use the path the router matches."""
+    async with _client(fake, api_key="secret") as c:
+        r = await c.post(path, json=CHAT, headers={"host": host})
+    assert r.status_code == 401
+    assert not fake.calls, "a refused request must never spend credits"
+
+
 def test_cli_serve_enables_the_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     import uvicorn
 

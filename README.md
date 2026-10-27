@@ -248,7 +248,9 @@ off with `FLUX_OS_DISABLE=mistral-large-3` (or a whole provider with `FLUX_OS_DI
   Set `FLUX_OS_API_KEY` if other local software or users should not be able to use your keys either.
 - **`FLUX_OS_DISABLE` and `FLUX_OS_ONLY_MODELS` also apply to pinned models.** A client cannot pin a model or
   provider you switched off. Pass-through names (`provider/model`, unknown `gpt-*` / `claude-*` names) are
-  checked against the same lists. `ollama/<model>` reaches whatever `OLLAMA_BASE_URL` points to.
+  checked against the same lists. To block a whole provider reliably use `provider:<name>`; a catalog id
+  blocks that model's catalog id and upstream id, but a few models (`gpt-oss-*`, `mistral-*-3*`) can still be
+  reached through a provider-prefixed spelling. `ollama/<model>` reaches whatever `OLLAMA_BASE_URL` points to.
 - **Logs are not telemetry, but they can contain provider error text.** Prompts, responses and keys are never
   logged. Upstream error messages are, with key-shaped strings and your configured keys masked, so treat
   the server's stderr as sensitive anyway.
